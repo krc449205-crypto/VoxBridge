@@ -1,4 +1,4 @@
-name: Build APK
+    name: Build APK
 
 on:
   workflow_dispatch:
@@ -26,8 +26,61 @@ jobs:
           mkdir -p www
           cp index.html www/
 
+      - name: Make logo files
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          mkdir -p assets
+          cat > assets/bg.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFE046"/>
+                <stop offset="1" stop-color="#FFB000"/>
+              </linearGradient>
+            </defs>
+            <rect width="1024" height="1024" fill="url(#g)"/>
+          </svg>
+          EOF
+          cat > assets/fg62.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+            <g transform="translate(512 512) scale(0.62) translate(-512 -512)">
+              <polygon points="212,212 352,212 512,560 672,212 812,212 512,812" fill="#0D1B2A"/>
+              <rect x="467" y="232" width="90" height="160" rx="45" fill="#E63946"/>
+              <rect x="480" y="252" width="12" height="78" rx="6" fill="#FF8C96"/>
+              <path d="M456 359 A56 59 0 0 0 568 359" fill="none" stroke="#E63946" stroke-width="14"/>
+              <rect x="505" y="418" width="14" height="30" fill="#E63946"/>
+            </g>
+          </svg>
+          EOF
+          cat > assets/full.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFE046"/>
+                <stop offset="1" stop-color="#FFB000"/>
+              </linearGradient>
+            </defs>
+            <rect width="1024" height="1024" fill="url(#g)"/>
+            <g transform="translate(512 512) scale(0.85) translate(-512 -512)">
+              <polygon points="212,212 352,212 512,560 672,212 812,212 512,812" fill="#0D1B2A"/>
+              <rect x="467" y="232" width="90" height="160" rx="45" fill="#E63946"/>
+              <rect x="480" y="252" width="12" height="78" rx="6" fill="#FF8C96"/>
+              <path d="M456 359 A56 59 0 0 0 568 359" fill="none" stroke="#E63946" stroke-width="14"/>
+              <rect x="505" y="418" width="14" height="30" fill="#E63946"/>
+            </g>
+          </svg>
+          EOF
+          rsvg-convert -w 1024 -h 1024 assets/bg.svg -o assets/icon-background.png
+          rsvg-convert -w 1024 -h 1024 assets/fg62.svg -o assets/icon-foreground.png
+          rsvg-convert -w 1024 -h 1024 assets/full.svg -o assets/icon-only.png
+          rm assets/bg.svg assets/fg62.svg assets/full.svg
+
       - name: Add Android
         run: npx cap add android
+
+      - name: Apply logo
+        run: npx --yes @capacitor/assets@3 generate --android
 
       - name: Sync
         run: npx cap sync android
