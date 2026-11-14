@@ -1,1 +1,50 @@
-
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxBridge</title>
+<style>
+body{font-family:sans-serif;background:#0d1117;color:#fff;margin:0;padding:16px}
+h1{text-align:center}
+select,button{width:100%;padding:14px;margin:6px 0;font-size:18px;border-radius:10px;border:0}
+button{background:#238636;color:#fff}
+.box{background:#161b22;padding:12px;border-radius:10px;margin:8px 0;min-height:50px}
+</style>
+</head>
+<body>
+<h1>VoxBridge</h1>
+<select id="from"></select>
+<select id="to"></select>
+<button id="mic">🎤 Bolo</button>
+<div class="box" id="heard">Aapne kaha: ...</div>
+<div class="box" id="out">Translation: ...</div>
+<script>
+const langs=[["hi","hi-IN","Hindi"],["en","en-US","English"],["ur","ur-PK","Urdu"],["bn","bn-IN","Bengali"],["ta","ta-IN","Tamil"],["te","te-IN","Telugu"],["mr","mr-IN","Marathi"],["gu","gu-IN","Gujarati"],["es","es-ES","Spanish"],["fr","fr-FR","French"]];
+const f=document.getElementById("from"),t=document.getElementById("to");
+const heard=document.getElementById("heard"),out=document.getElementById("out");
+langs.forEach((l,i)=>{f.add(new Option(l[2],i));t.add(new Option(l[2],i));});
+f.value=0;t.value=1;
+document.getElementById("mic").onclick=()=>{
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){alert("Is browser mein mic support nahi hai. Chrome use karo.");return;}
+ const r=new SR();r.lang=langs[f.value][1];
+ r.onresult=async e=>{
+  const text=e.results[0][0].transcript;
+  heard.textContent="Aapne kaha: "+text;
+  try{
+   const u="https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair="+langs[f.value][0]+"|"+langs[t.value][0];
+   const d=await (await fetch(u)).json();
+   const tr=d.responseData.translatedText;
+   out.textContent="Translation: "+tr;
+   const s=new SpeechSynthesisUtterance(tr);
+   s.lang=langs[t.value][1];
+   speechSynthesis.speak(s);
+  }catch(x){out.textContent="Error: net check karo";}
+ };
+ r.onerror=e=>{heard.textContent="Mic error: "+e.error};
+ r.start();
+};
+</script>
+</body>
+</html>
