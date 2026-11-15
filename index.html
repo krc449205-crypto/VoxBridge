@@ -28,8 +28,27 @@ function st(m){stBox.textContent="Status: "+m;}
 langs.forEach((l,i)=>{f.add(new Option(l[2],i));t.add(new Option(l[2],i));});
 f.value=0;t.value=1;
 
-function getPlugin(){
- return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+function plugin(name){
+ return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name];
+}
+
+async function speakText(text,lang){
+ const TTS=plugin("TextToSpeech");
+ if(TTS){
+  try{
+   await TTS.speak({text:text,lang:lang,rate:1.0,pitch:1.0,volume:1.0});
+   return "Done (bol diya)";
+  }catch(e){
+   return "Bolne me error: "+(e&&e.message?e.message:e);
+  }
+ }
+ if(window.speechSynthesis){
+  const s=new SpeechSynthesisUtterance(text);
+  s.lang=lang;
+  speechSynthesis.speak(s);
+  return "Done (bol diya)";
+ }
+ return "Done (bolne wala plugin nahi mila)";
 }
 
 async function translateAndSpeak(text){
@@ -38,19 +57,14 @@ async function translateAndSpeak(text){
  const d=await (await fetch(u)).json();
  const tr=d.responseData.translatedText;
  out.textContent="Translation: "+tr;
- if(window.speechSynthesis){
-  const s=new SpeechSynthesisUtterance(tr);
-  s.lang=langs[t.value][1];
-  speechSynthesis.speak(s);
-  st("Done");
- }else{
-  st("Done (is phone me awaaz nahi bol sakta)");
- }
+ st("Bol raha hoon...");
+ const msg=await speakText(tr,langs[t.value][1]);
+ st(msg);
 }
 
 document.getElementById("mic").onclick=async()=>{
  try{
-  const SR=getPlugin();
+  const SR=plugin("SpeechRecognition");
   if(!SR){st("Speech plugin nahi mila");return;}
   const av=await SR.available();
   if(!av.available){st("Is phone me speech recognition available nahi hai");return;}
