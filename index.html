@@ -28,7 +28,7 @@ select option{background:#14141c}
 .mic.listening::before,.mic.listening::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(255,214,90,.8);animation:ring 1.4s infinite}
 .mic.listening::after{animation-delay:.7s}
 @keyframes ring{from{transform:scale(1);opacity:.9}to{transform:scale(1.7);opacity:0}}
-.chip{text-align:center;font-size:13px;letter-spacing:1px;color:#e0c97a;min-height:20px;margin-bottom:6px;text-shadow:0 1px 6px #000}
+.chip{text-align:center;font-size:13px;letter-spacing:1px;color:#e0c97a;min-height:20px;margin-bottom:6px;text-shadow:0 1px 6px #000;word-break:break-word}
 .stage{position:relative;height:270px;margin:2px 0 6px}
 .glow{position:absolute;left:50%;bottom:40px;width:170px;height:170px;margin-left:-85px;border-radius:50%;background:radial-gradient(circle,rgba(255,235,150,.95),rgba(255,200,0,0) 65%);opacity:.25;transform:scale(.5);transition:all .6s}
 .stage.open .glow{opacity:1;transform:scale(1.2)}
@@ -84,6 +84,9 @@ input[type=range]{flex:1;accent-color:#e0a800}
 </details>
 </div>
 <script>
+window.onerror=function(m,s,l){var e=document.getElementById("stBox");if(e)e.textContent="JS error: "+m+" (line "+l+")";};
+</script>
+<script>
 const langs=[["hi","hi-IN","Hindi"],["en","en-US","English"],["ur","ur-PK","Urdu"],["bn","bn-IN","Bengali"],["ta","ta-IN","Tamil"],["te","te-IN","Telugu"],["mr","mr-IN","Marathi"],["gu","gu-IN","Gujarati"],["es","es-ES","Spanish"],["fr","fr-FR","French"]];
 const $=id=>document.getElementById(id);
 const f=$("from"),t=$("to"),stBox=$("stBox"),heard=$("heard"),out=$("out"),stage=$("stage"),packs=$("packs");
@@ -95,6 +98,14 @@ function save(){try{localStorage.setItem("vb_cfg",JSON.stringify(cfg));}catch(e)
 function st(m){stBox.textContent=m;}
 function pre(i){return langs[i][1].slice(0,2);}
 function plugin(n){return window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins[n];}
+function errText(e){
+ try{
+  if(!e)return "unknown";
+  const o={};
+  Object.getOwnPropertyNames(e).forEach(k=>{o[k]=e[k];});
+  return (e.message||"")+" | "+JSON.stringify(o);
+ }catch(x){return String(e);}
+}
 
 function fillVoices(){
  voiceSel.innerHTML="";
@@ -144,26 +155,34 @@ function drawPacks(){
 }
 async function refreshPacks(){
  const M=plugin("Translation");
- if(!M){packs.innerHTML='<div class="note">Offline plugin nahi mila</div>';return;}
- try{const r=await M.getDownloadedModels();dl=new Set(r.languages||[]);}catch(e){st("Pack list error: "+(e&&e.message?e.message:e));}
+ if(!M){st("Offline plugin nahi mila");drawPacks();return;}
+ try{const r=await M.getDownloadedModels();dl=new Set(r.languages||[]);}catch(e){st("Pack list error: "+errText(e));}
  drawPacks();
 }
 async function togglePack(l,b){
  const M=plugin("Translation");
- if(!M)return;
+ if(!M){st("Offline plugin nahi mila");return;}
  b.disabled=true;
  try{
   if(dl.has(l[0])){
    await M.deleteDownloadedModel({language:l[0]});
    st(l[2]+" pack hata diya");
   }else{
-   st(l[2]+" pack download ho raha hai...");
-   await M.downloadModel({language:l[0]});
+   st(l[2]+" pack download... (max 2 min)");
+   await Promise.race([
+    M.downloadModel({language:l[0]}),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error("2 min me download nahi hua (timeout)")),120000))
+   ]);
    st(l[2]+" pack taiyaar");
   }
- }catch(e){st("Pack error: "+(e&&e.message?e.message:e));}
+ }catch(e){
+  const m=errText(e);
+  st("Pack error: "+m);
+  heard.textContent="Pack error: "+m;
+ }
  await refreshPacks();
 }
+drawPacks();
 setTimeout(refreshPacks,1000);
 
 async function speakText(text,lang){
@@ -235,7 +254,7 @@ async function answer(text,lang,mode){
 
 async function doTranslate(text,fi,ti){
  const M=plugin("Translation"),a=langs[fi][0],b=langs[ti][0];
- const ready=x=>x==="en"||dl.has(x);
+ const ready=x=>dl.has(x);
  if(M&&ready(a)&&ready(b)){
   try{
    const r=await M.translate({text:text,sourceLanguage:a,targetLanguage:b});
@@ -280,41 +299,11 @@ async function listen(fi,ti,btn){
   heard.textContent=text;
   await translateAndSpeak(text,fi,ti);
  }catch(e){
-  st("Error: "+(e&&e.message?e.message:e));
+  st("Error: "+errText(e));
  }finally{busy=false;}
 }
 micA.onclick=()=>listen(+f.value,+t.value,micA);
-micB.onclick=()=>listen function errText(e){
- try{
-  if(!e)return "unknown";
-  const o={};
-  Object.getOwnPropertyNames(e).forEach(k=>{o[k]=e[k];});
-  return (e.message||"")+" | "+JSON.stringify(o);
- }catch(x){return String(e);}
-}
-async function togglePack(l,b){
- const M=plugin("Translation");
- if(!M){st("Offline plugin nahi mila");return;}
- b.disabled=true;
- try{
-  if(dl.has(l[0])){
-   await M.deleteDownloadedModel({language:l[0]});
-   st(l[2]+" pack hata diya");
-  }else{
-   st(l[2]+" pack download... (max 2 min)");
-   await Promise.race([
-    M.downloadModel({language:l[0]}),
-    new Promise((_,rej)=>setTimeout(()=>rej(new Error("2 min me download nahi hua (timeout)")),120000))
-   ]);
-   st(l[2]+" pack taiyaar");
-  }
- }catch(e){
-  const m=errText(e);
-  st("Pack error: "+m);
-  heard.textContent="Pack error: "+m;
- }
- await refreshPacks();
-} (+t.value,+f.value,micB);
+micB.onclick=()=>listen(+t.value,+f.value,micB);
 </script>
 </body>
- </html> 
+</html>
