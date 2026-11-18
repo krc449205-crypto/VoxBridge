@@ -284,7 +284,37 @@ async function listen(fi,ti,btn){
  }finally{busy=false;}
 }
 micA.onclick=()=>listen(+f.value,+t.value,micA);
-micB.onclick=()=>listen(+t.value,+f.value,micB);
+micB.onclick=()=>listen function errText(e){
+ try{
+  if(!e)return "unknown";
+  const o={};
+  Object.getOwnPropertyNames(e).forEach(k=>{o[k]=e[k];});
+  return (e.message||"")+" | "+JSON.stringify(o);
+ }catch(x){return String(e);}
+}
+async function togglePack(l,b){
+ const M=plugin("Translation");
+ if(!M){st("Offline plugin nahi mila");return;}
+ b.disabled=true;
+ try{
+  if(dl.has(l[0])){
+   await M.deleteDownloadedModel({language:l[0]});
+   st(l[2]+" pack hata diya");
+  }else{
+   st(l[2]+" pack download... (max 2 min)");
+   await Promise.race([
+    M.downloadModel({language:l[0]}),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error("2 min me download nahi hua (timeout)")),120000))
+   ]);
+   st(l[2]+" pack taiyaar");
+  }
+ }catch(e){
+  const m=errText(e);
+  st("Pack error: "+m);
+  heard.textContent="Pack error: "+m;
+ }
+ await refreshPacks();
+} (+t.value,+f.value,micB);
 </script>
 </body>
- </html>
+ </html> 
