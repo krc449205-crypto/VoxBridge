@@ -51,10 +51,7 @@ input[type=range]{flex:1;accent-color:#e0a800}
 .pre{display:flex;gap:8px;margin-top:12px}
 .pre button{flex:1;padding:10px;border-radius:12px;border:1px solid rgba(212,175,55,.5);background:rgba(15,15,22,.85);color:#f5e6b3;font-size:14px;font-family:inherit}
 .note{font-size:12px;color:#b9a25a;margin-top:10px;line-height:1.4}
-.prow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(212,175,55,.15)}
-.prow span{flex:1;font-size:16px}
-.prow i{color:#b9a25a;font-style:normal;font-size:12px}
-.prow button{width:42px;height:34px;border-radius:10px;border:1px solid rgba(212,175,55,.5);background:rgba(15,15,22,.85);color:#ffd45a;font-size:16px}
+.inp{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(212,175,55,.5);background:rgba(15,15,22,.85);color:#f5e6b3;font-size:16px;font-family:inherit;margin-top:10px}
 </style>
 </head>
 <body>
@@ -71,9 +68,13 @@ input[type=range]{flex:1;accent-color:#e0a800}
 <div class="stage" id="stage"><div class="glow"></div><div class="chest"><div class="base"></div><div class="lid"></div></div></div>
 <div class="card"><div class="label">You said</div><div class="txt" id="heard">...</div></div>
 <div class="card"><div class="label">Translation</div><div class="txt" id="out">...</div></div>
-<details class="card"><summary>📦 Offline Packs</summary>
-<div class="note">Har bhasha ka pack ek baar net se download karo (lagbhag 30MB). Uske baad translation bina net ke chalega.</div>
-<div id="packs"></div>
+<details class="card"><summary>🧪 Offline Test (Hindi → English)</summary>
+<div class="note">Model lagbhag 110MB hai, ek baar net se download hoga. Uske baad Hindi se English translation phone ke andar chalega.</div>
+<div class="pre"><button id="mLoad">⬇ Model download / load</button></div>
+<div class="chip" id="mStat" style="margin-top:10px">Not loaded</div>
+<input id="mIn" class="inp" value="नमस्ते, आप कैसे हैं">
+<div class="pre"><button id="mTest">▶ Test translate</button></div>
+<div class="txt" id="mOut"></div>
 </details>
 <details class="card"><summary>🎚 Voice Studio</summary>
 <select id="voiceSel"></select>
@@ -89,10 +90,10 @@ window.onerror=function(m,s,l){var e=document.getElementById("stBox");if(e)e.tex
 <script>
 const langs=[["hi","hi-IN","Hindi"],["en","en-US","English"],["ur","ur-PK","Urdu"],["bn","bn-IN","Bengali"],["ta","ta-IN","Tamil"],["te","te-IN","Telugu"],["mr","mr-IN","Marathi"],["gu","gu-IN","Gujarati"],["es","es-ES","Spanish"],["fr","fr-FR","French"]];
 const $=id=>document.getElementById(id);
-const f=$("from"),t=$("to"),stBox=$("stBox"),heard=$("heard"),out=$("out"),stage=$("stage"),packs=$("packs");
+const f=$("from"),t=$("to"),stBox=$("stBox"),heard=$("heard"),out=$("out"),stage=$("stage");
 const micA=$("micA"),micB=$("micB"),voiceSel=$("voiceSel"),pitch=$("pitch"),rate=$("rate");
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let voices=[],cfg={pitch:1,rate:1,v:{}},dl=new Set();
+let voices=[],cfg={pitch:1,rate:1,v:{}},vbTr=null;
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("vb_cfg")||"{}"));}catch(e){}
 function save(){try{localStorage.setItem("vb_cfg",JSON.stringify(cfg));}catch(e){}}
 function st(m){stBox.textContent=m;}
@@ -139,51 +140,40 @@ voiceSel.onchange=()=>{
  save();
 };
 
-function drawPacks(){
- packs.innerHTML="";
- langs.forEach(l=>{
-  const ok=dl.has(l[0]);
-  const r=document.createElement("div");
-  r.className="prow";
-  r.innerHTML="<span>"+l[2]+"</span><i>"+(ok?"Ready":"Not downloaded")+"</i>";
-  const b=document.createElement("button");
-  b.textContent=ok?"🗑":"⬇";
-  b.onclick=()=>togglePack(l,b);
-  r.appendChild(b);
-  packs.appendChild(r);
- });
-}
-async function refreshPacks(){
- const M=plugin("Translation");
- if(!M){st("Offline plugin nahi mila");drawPacks();return;}
- try{const r=await M.getDownloadedModels();dl=new Set(r.languages||[]);}catch(e){st("Pack list error: "+errText(e));}
- drawPacks();
-}
-async function togglePack(l,b){
- const M=plugin("Translation");
- if(!M){st("Offline plugin nahi mila");return;}
- b.disabled=true;
+const TLIB="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0";
+$("mLoad").onclick=async()=>{
+ const s=$("mStat");
  try{
-  if(dl.has(l[0])){
-   await M.deleteDownloadedModel({language:l[0]});
-   st(l[2]+" pack hata diya");
-  }else{
-   st(l[2]+" pack download... (max 2 min)");
-   await Promise.race([
-    M.downloadModel({language:l[0]}),
-    new Promise((_,rej)=>setTimeout(()=>rej(new Error("2 min me download nahi hua (timeout)")),120000))
-   ]);
-   st(l[2]+" pack taiyaar");
-  }
+  s.textContent="Library load ho rahi hai...";
+  const m=await import(TLIB);
+  m.env.allowLocalModels=false;
+  const files={};
+  vbTr=await m.pipeline("translation","Xenova/opus-mt-hi-en",{dtype:"q8",progress_callback:p=>{
+   if(p.status==="progress"&&p.total){
+    files[p.file]={l:p.loaded,t:p.total};
+    let L=0,T=0;
+    for(const k in files){L+=files[k].l;T+=files[k].t;}
+    s.textContent="Download: "+(L/1048576).toFixed(1)+" / "+(T/1048576).toFixed(1)+" MB";
+   }
+  }});
+  s.textContent="Model taiyaar ✔";
  }catch(e){
-  const m=errText(e);
-  st("Pack error: "+m);
-  heard.textContent="Pack error: "+m;
+  vbTr=null;
+  s.textContent="Error: "+errText(e);
  }
- await refreshPacks();
-}
-drawPacks();
-setTimeout(refreshPacks,1000);
+};
+$("mTest").onclick=async()=>{
+ const s=$("mStat");
+ if(!vbTr){s.textContent="Pehle model download / load karo";return;}
+ try{
+  s.textContent="Translate ho raha hai...";
+  const t0=performance.now();
+  const r=await vbTr($("mIn").value||"नमस्ते, आप कैसे हैं");
+  const sec=((performance.now()-t0)/1000).toFixed(1);
+  $("mOut").textContent=r[0].translation_text+"  ("+sec+" sec)";
+  s.textContent="Test done";
+ }catch(e){s.textContent="Error: "+errText(e);}
+};
 
 async function speakText(text,lang){
  const T=plugin("TextToSpeech");
@@ -253,12 +243,11 @@ async function answer(text,lang,mode){
 }
 
 async function doTranslate(text,fi,ti){
- const M=plugin("Translation"),a=langs[fi][0],b=langs[ti][0];
- const ready=x=>dl.has(x);
- if(M&&ready(a)&&ready(b)){
+ const a=langs[fi][0],b=langs[ti][0];
+ if(vbTr&&a==="hi"&&b==="en"){
   try{
-   const r=await M.translate({text:text,sourceLanguage:a,targetLanguage:b});
-   if(r&&r.text)return {text:r.text,mode:"Offline"};
+   const r=await vbTr(text);
+   return {text:r[0].translation_text,mode:"Offline"};
   }catch(e){}
  }
  try{
@@ -266,7 +255,7 @@ async function doTranslate(text,fi,ti){
   const d=await (await fetch(u)).json();
   return {text:d.responseData.translatedText,mode:"Online"};
  }catch(e){
-  throw new Error("Internet nahi hai aur offline pack bhi nahi mila. Offline Packs se download karo.");
+  throw new Error("Internet nahi hai aur offline model bhi load nahi hai.");
  }
 }
 async function translateAndSpeak(text,fi,ti){
